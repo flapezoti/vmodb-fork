@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dk.ku.di.dms.vms</groupId>
+    <artifactId>vms-runtime-java</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>modb</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <name>modb</name>
+
+  <dependencies>
+
+      <dependency>
+          <groupId>dk.ku.di.dms.vms</groupId>
+          <artifactId>modb-common</artifactId>
+          <version>1.0-SNAPSHOT</version>
+      </dependency>
+
+      <dependency>
+          <groupId>dk.ku.di.dms.vms</groupId>
+          <artifactId>modb-api</artifactId>
+          <version>1.0-SNAPSHOT</version>
+      </dependency>
+
+  </dependencies>
+
+</project>

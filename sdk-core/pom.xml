@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dk.ku.di.dms.vms</groupId>
+    <artifactId>vms-runtime-java</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>sdk-core</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>sdk-core</name>
+
+  <dependencies>
+
+    <!-- to look for VMS annotated classes -->
+    <dependency>
+      <groupId>org.reflections</groupId>
+      <artifactId>reflections</artifactId>
+      <version>0.10.2</version>
+    </dependency>
+
+    <!-- to avoid dynamic proxy -->
+    <dependency>
+      <groupId>net.bytebuddy</groupId>
+      <artifactId>byte-buddy</artifactId>
+      <version>1.14.11</version>
+    </dependency>
+
+    <!-- primitive collections to reduce memory footprint -->
+    <dependency>
+      <groupId>org.eclipse.collections</groupId>
+      <artifactId>eclipse-collections</artifactId>
+      <version>13.0.0</version>
+    </dependency>
+
+    <dependency>
+        <groupId>dk.ku.di.dms.vms</groupId>
+        <artifactId>modb-common</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+
+    <dependency>
+      <groupId>dk.ku.di.dms.vms</groupId>
+      <artifactId>modb-api</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+
+    <dependency>
+      <groupId>dk.ku.di.dms.vms</groupId>
+      <artifactId>web_common</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+
+  </dependencies>
+
+</project>

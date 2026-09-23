@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dk.ku.di.dms.vms</groupId>
+    <artifactId>vms-runtime-java</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+
+<!--  <groupId>dk.ku.di.dms.vms.modb</groupId>-->
+  <artifactId>modb-api</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <name>modb-api</name>
+
+  <properties>
+    <javax.validation.version>2.0.1.Final</javax.validation.version>
+    <javax.persistence.version>2.2</javax.persistence.version>
+  </properties>
+
+  <dependencies>
+
+    <dependency>
+      <groupId>javax.validation</groupId>
+      <artifactId>validation-api</artifactId>
+      <version>${javax.validation.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.persistence</groupId>
+      <artifactId>javax.persistence-api</artifactId>
+      <version>${javax.persistence.version}</version>
+    </dependency>
+
+  </dependencies>
+
+</project>
