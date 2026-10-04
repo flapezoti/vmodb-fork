@@ -88,8 +88,11 @@ public final class ConfigUtils {
         return null;
     }
 
+    // "build" is VmsApplication's original entry point; "prepare" is the two-phase entry point
+    // used by external-DI integrations (e.g. Spring) -- see VmsApplication#prepare(...).
     private static boolean isVmsApplicationBuild(StackTraceElement element) {
-        return "build".equals(element.getMethodName()) && "VmsApplication.java".equals(element.getFileName());
+        return ("build".equals(element.getMethodName()) || "prepare".equals(element.getMethodName()))
+                && "VmsApplication.java".equals(element.getFileName());
     }
 
 }

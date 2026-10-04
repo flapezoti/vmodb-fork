@@ -74,6 +74,24 @@ public final class VmsMetadataLoader {
         // also load the corresponding repository facade
         Map<String, Object> loadedVmsInstances = loadMicroserviceClasses(vmsClasses, vmsToRepositoriesMap);
 
+        return loadWithPreBuiltInstances(reflections, packageName, vmsClasses, vmsDataModelMap, loadedVmsInstances, tableToRepositoryMap);
+    }
+
+    /**
+     * Same as load(...) above, except the @Microservice instances are supplied by the caller
+     * (e.g. constructed by an external DI framework such as Spring) instead of being built here
+     * via reflection. loadedVmsInstances must be keyed by each class's canonical name
+     * (Class#getName()), matching the convention VmsApplication#getService(String) already reads
+     * back out by -- confirmed by loadMicroserviceClasses(...) below, which populates the
+     * equivalent map that exact way for the reflective-construction path.
+     */
+    public static VmsRuntimeMetadata loadWithPreBuiltInstances(Reflections reflections,
+                                          String packageName,
+                                          Set<Class<?>> vmsClasses,
+                                          Map<String, VmsDataModel> vmsDataModelMap,
+                                          Map<String, Object> loadedVmsInstances,
+                                          Map<String, Object> tableToRepositoryMap) {
+
         // necessary remaining data structures to store a vms metadata
         Map<String, VmsTransactionMetadata> queueToVmsTransactionMap = new HashMap<>();
 

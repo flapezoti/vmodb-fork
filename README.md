@@ -108,3 +108,58 @@ At the core of vMODB lies the virtual micro service (VMS) programming model. Thr
 - [Packet Size ,Window Size and Socket Buffer In TCP](https://stackoverflow.com/a/37267929/7735153)
 - [Throughput and TCP windows](http://packetbomb.com/understanding-throughput-and-tcp-windows/)
 - [Tuning the window size](https://docs.oracle.com/cd/E23507_01/Platform.20073/ATGInstallGuide/html/s0507tuningthetcpwindowsize01.html)
+
+## Fork-specific changes
+
+Everything above this section is the unmodified upstream README. The change below is the modification, made to support "deep"dependency injection (a host framework like Spring constructing `@Microservice` instances itself, instead of VMODB's own reflection), while keeping the existing `VmsApplication.build(...)` entry
+point untouched.
+
+### Two-phase construction: `VmsApplication.prepare(...)` / `VmsPreparedApplication#complete(...)`
+
+`VmsApplication.build(options, handlerBuilder)` does five things in sequence: scans for
+`@Microservice`/`@VmsTable` classes in the caller's package, loads the catalog and storage,
+builds each table's repository proxy, **constructs every `@Microservice` instance via
+reflection**, then wires the event handler and transaction scheduler around all of it. A host
+framework like Spring cannot `@Autowired` anything into a `@Microservice` class built this way —
+by the time Spring could get a reference to it, VMODB has already constructed it itself with no
+Spring involvement at all.
+
+The fix splits that sequence in two, instead of threading an externally-built-instance parameter
+through the single `build(...)` method:
+
+- **`VmsApplication.prepare(options)`** runs everything up to, but not including, constructing
+  the `@Microservice` instance(s). It returns a new `VmsPreparedApplication`, which exposes the
+  repository proxies already built (`getRepositoryProxy(table)`) — enough for a caller to
+  construct its own, externally-managed `@Microservice` instance(s) with real constructor
+  injection.
+- **`VmsPreparedApplication#complete(vmsInstances, handlerBuilder)`** takes those
+  externally-built instances (keyed by `Class#getName()`, the same convention
+  `VmsApplication#getService(String)` already reads back out by) and finishes exactly what
+  `build(...)` would have done from that point on — event schema mapping, event handler,
+  transaction scheduler — returning an ordinary `VmsApplication`.
+
+`build(...)` itself is **completely unchanged**: it still constructs `@Microservice` instances
+via reflection, exactly as before, and does not call `prepare(...)`/`complete(...)` internally.
+The split is implemented by extracting `build(...)`'s second half into a new, differently-named
+method (`VmsMetadataLoader.loadWithPreBuiltInstances(...)`, not an overload — Java can't
+distinguish `Map<String,List<Object>>` from `Map<String,Object>` by generic type alone at the
+bytecode level) that both `build(...)` and `complete(...)` now call.
+
+**Backward compatibility, verified empirically, not just by inspection:** `vmodb-marketplace`'s
+full existing test suite (`CartProductPriceOrderingTest`, `SpringQueryApiTest`) passes unchanged
+against this modified fork, both before this change (via `build(...)`, shallow DI) and after
+(via `prepare(...)`/`complete(...)`, deep DI, with `vmodb-marketplace`'s `Main.java` files
+rewritten to use it). No other VMODB module needed to change.
+
+**A real constraint found while wiring this up:** `ConfigUtils.getCallerPackage()` — used by both
+`build(...)` and `prepare(...)` to find which `@Microservice`/`@VmsTable` classes belong to "this"
+VMS — walks the stack trace looking for a frame whose method name is literally `"build"` to find
+the direct caller above it. Hardcoded to that one string, it never recognized `prepare(...)` as
+an entry point, so `prepare(...)` always threw `IllegalStateException: Cannot identify package.`
+regardless of caller. Fixed by widening the check
+(`modb-common/.../ConfigUtils.java#isVmsApplicationBuild`) to accept either `"build"` or
+`"prepare"`. This does not change behavior for any existing `build(...)` caller.
+
+See `vmodb-spring-starter/README.md` for the Spring-facing API this enables
+(`VmodbBootstrap.repository(VmsPreparedApplication, String)`), and
+`vmodb-marketplace/README.md` for a concrete application built on it.
