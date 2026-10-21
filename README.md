@@ -163,3 +163,40 @@ regardless of caller. Fixed by widening the check
 See `vmodb-spring-starter/README.md` for the Spring-facing API this enables
 (`VmodbBootstrap.repository(VmsPreparedApplication, String)`), and
 `vmodb-marketplace/README.md` for a concrete application built on it.
+
+### Second fix: `EmbedMetadataLoader` assumed every constructor parameter was a repository
+
+Found while building a hexagonal ports-and-adapters layer on top of deep DI (see
+`vmodb-marketplace/README.md`): once a `@Microservice` class's constructor took a parameter that
+was *not* a VMODB repository (a plain business-rule collaborator, injected by Spring the same
+way the repository is), `prepare()` threw `ArrayIndexOutOfBoundsException: Index 0 out of bounds
+for length 0`.
+
+Root cause, in `EmbedMetadataLoader.mapVmsToRepositoryClasses` (unchanged VMODB code): it takes
+the `@Microservice` class's first declared constructor and treats **every** parameter as a
+VMODB repository interface, with no filtering. For each one it calls
+`repositoryType.getGenericInterfaces()[0]`, expecting `IRepository<PK,Entity>` — which crashes
+immediately on any parameter that isn't a repository at all.
+
+This is not a general VMODB constraint an ordinary adopter would hit — it was latent in VMODB's
+original code, but unreachable until deep DI's own promise (a `@Microservice` constructor can
+take any Spring-managed collaborator) was actually exercised with a non-repository parameter for
+the first time. Closing it is part of finishing deep DI properly, not a separately-discovered
+VMODB rough edge. Fixed by filtering to parameters assignable to `IRepository`:
+
+```java
+Class<?>[] repositoryTypes = Arrays.stream(constructor.getParameterTypes())
+        .filter(IRepository.class::isAssignableFrom)
+        .toArray(Class<?>[]::new);
+```
+
+**A related, general finding that did *not* need a fork change:** VMODB has exactly one source
+of truth for "which tables need a repository proxy built" — scanning the `@Microservice` class's
+own constructor. Hiding a repository type behind an adapter class *entirely* (so no
+`@Microservice` class's constructor mentions it) silently tells VMODB this VMS needs no
+repositories at all, and it builds none — breaking even unrelated beans that need that table's
+proxy. Unlike the fix above, this one **is** a general VMODB design fact, not specific to
+anything built in this project: any adopter trying to decouple "which class declares a repository
+dependency" from "which class VMODB scans" hits it, with or without Spring. No fork change
+addresses it; the constructor just has to keep mentioning the repository type, even if it
+immediately wraps it into something else.
