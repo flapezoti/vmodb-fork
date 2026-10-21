@@ -3,6 +3,7 @@ package dk.ku.di.dms.vms.sdk.embed.metadata;
 import dk.ku.di.dms.vms.modb.api.annotations.Query;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
+import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.constraint.ForeignKeyReference;
 import dk.ku.di.dms.vms.modb.common.data_structure.Tuple;
@@ -44,8 +45,14 @@ public final class EmbedMetadataLoader {
         Class<?> cls = Class.forName(clazzName);
         Constructor<?>[] constructors = cls.getDeclaredConstructors();
         Constructor<?> constructor = constructors[0];
-        // the IRepository interfaces required for this VMS
-        Class<?>[] repositoryTypes = constructor.getParameterTypes();
+        // the IRepository interfaces required for this VMS -- filtered out of the full
+        // parameter list, since a @Microservice class's constructor may also take other
+        // dependencies (e.g. a plain business-logic collaborator) that aren't repositories at
+        // all, in particular under the "deep" external-DI construction path (see
+        // VmsApplication#prepare()), where the host framework is free to inject anything there.
+        Class<?>[] repositoryTypes = Arrays.stream(constructor.getParameterTypes())
+                .filter(IRepository.class::isAssignableFrom)
+                .toArray(Class<?>[]::new);
         return new VmsToRepositoryMap(clazzName, cls, constructor, repositoryTypes);
     }
 
