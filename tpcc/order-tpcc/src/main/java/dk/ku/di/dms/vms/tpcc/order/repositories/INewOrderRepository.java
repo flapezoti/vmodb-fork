@@ -1,7 +1,6 @@
 package dk.ku.di.dms.vms.tpcc.order.repositories;
 
 import dk.ku.di.dms.vms.modb.api.annotations.Query;
-import dk.ku.di.dms.vms.modb.api.annotations.Repository;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
 import dk.ku.di.dms.vms.modb.definition.key.composite.PairCompositeKey;
 import dk.ku.di.dms.vms.tpcc.order.entities.NewOrder;
@@ -10,7 +9,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
-@Repository
 public interface INewOrderRepository extends IRepository<NewOrder.NewOrderId, NewOrder> {
 
     static Map<PairCompositeKey, TreeMap<NewOrder.NewOrderId, NewOrder>> NEW_ORDERS = new HashMap<>();

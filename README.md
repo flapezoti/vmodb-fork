@@ -195,8 +195,8 @@ of truth for "which tables need a repository proxy built" — scanning the `@Mic
 own constructor. Hiding a repository type behind an adapter class *entirely* (so no
 `@Microservice` class's constructor mentions it) silently tells VMODB this VMS needs no
 repositories at all, and it builds none — breaking even unrelated beans that need that table's
-proxy. Unlike the fix above, this one **is** a general VMODB design fact, not specific to
-anything built in this project: any adopter trying to decouple "which class declares a repository
-dependency" from "which class VMODB scans" hits it, with or without Spring. No fork change
+proxy. Unlike the fix above, this one **is** a general VMODB design fact: any adopter trying to
+decouple "which class declares a repository dependency" from "which class VMODB scans" hits it,
+with or without Spring. No fork change
 addresses it; the constructor just has to keep mentioning the repository type, even if it
 immediately wraps it into something else.
