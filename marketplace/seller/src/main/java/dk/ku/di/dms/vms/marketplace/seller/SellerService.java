@@ -38,7 +38,6 @@ public final class SellerService {
 
     private final IOrderEntryRepository orderEntryRepository;
 
-    @VmsPreparedStatement("sellerDashboard")
     public static final SelectStatement SELLER_VIEW_BASE = QueryBuilderFactory.select()
             .project("seller_id").sum("total_amount").sum("freight_value")
             .sum("total_incentive").sum("total_invoice").sum("total_items")

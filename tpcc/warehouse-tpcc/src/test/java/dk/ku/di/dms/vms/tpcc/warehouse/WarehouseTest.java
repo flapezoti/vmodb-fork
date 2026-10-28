@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.tpcc.warehouse;
 
-import dk.ku.di.dms.vms.modb.api.annotations.VmsPreparedStatement;
 import dk.ku.di.dms.vms.modb.api.query.builder.QueryBuilderFactory;
 import dk.ku.di.dms.vms.modb.api.query.enums.ExpressionTypeEnum;
 import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
@@ -24,7 +23,6 @@ import java.util.List;
 
 public class WarehouseTest {
 
-    @VmsPreparedStatement("orderStatusCustomerQuery")
     public static final SelectStatement ORDER_STATUS_BASE_QUERY = QueryBuilderFactory.select()
             .project("c_balance").project("c_first").project("c_middle").project("c_last")
             .from("customer")

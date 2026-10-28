@@ -36,7 +36,6 @@ public final class ShipmentService {
 
     private final IPackageRepository packageRepository;
 
-    @VmsPreparedStatement("oldestShipmentPerSeller")
     public static final SelectStatement OLDEST_SHIPMENT_PER_SELLER = QueryBuilderFactory.select()
             .project("seller_id").project("customer_id").project("order_id").min("shipping_date")
             .from("packages").where("status", ExpressionTypeEnum.EQUALS, "shipped")
