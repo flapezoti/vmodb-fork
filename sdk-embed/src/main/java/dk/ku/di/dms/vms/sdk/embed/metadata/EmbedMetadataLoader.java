@@ -1,6 +1,5 @@
 package dk.ku.di.dms.vms.sdk.embed.metadata;
 
-import dk.ku.di.dms.vms.modb.api.annotations.Query;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsIndex;
 import dk.ku.di.dms.vms.modb.api.annotations.VmsPartialIndex;
 import dk.ku.di.dms.vms.modb.api.interfaces.IRepository;
@@ -23,20 +22,26 @@ import dk.ku.di.dms.vms.modb.utils.StorageUtils;
 import dk.ku.di.dms.vms.sdk.core.metadata.VmsMetadataLoader;
 import dk.ku.di.dms.vms.sdk.embed.facade.AbstractProxyRepository;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import javax.persistence.GeneratedValue;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class EmbedMetadataLoader {
+
+    // see buildRepositoryProxy's .name(...) call
+    private static final AtomicLong PROXY_COUNTER = new AtomicLong();
 
     private record VmsToRepositoryMap(String clazzName, Class<?> cls, Constructor<?> constructor, Class<?>[] repositoryTypes){}
 
@@ -66,54 +71,85 @@ public final class EmbedMetadataLoader {
             var vmsToRepositoryMap = mapVmsToRepositoryClasses(clazz);
 
             for (Class<?> repositoryType : vmsToRepositoryMap.repositoryTypes) {
-
                 Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
-
-                Class<?> pkClazz = (Class<?>) types[0];
                 Class<?> entityClazz = (Class<?>) types[1];
-
                 String tableName = entityToTableNameMap.get(entityClazz);
-
-                // generate type
-                TypeDescription.Generic generic = TypeDescription.Generic.Builder
-                        .parameterizedType(AbstractProxyRepository.class, pkClazz, entityClazz).build();
-
-                ByteBuddy byteBuddy = new ByteBuddy();
-                Class<?> type;
-                try (DynamicType.Unloaded<?> dynamicType = byteBuddy
-                        .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
-                        .implement(repositoryType)
-                        .method(ElementMatchers.isAnnotatedWith(Query.class) )
-                        .intercept(
-                                MethodDelegation.to(AbstractProxyRepository.Interceptor.class)
-                        )
-                        .name(repositoryType.getSimpleName().replaceFirst("I","") + "Impl")
-                        .make()) {
-                    type = dynamicType
-                            .load(ClassLoader.getSystemClassLoader(), ClassLoadingStrategy.Default.INJECTION)
-                            .getLoaded();
-                } catch (IllegalStateException e) {
-                    System.out.println("ERROR: Check if your module is loading other modules. \nVMS: "+clazz.getCanonicalName()+"\nLOADED: "+repositoryType.getCanonicalName());
-                    throw new RuntimeException(e);
-                } catch (Exception e){
-                    throw new RuntimeException(e);
-                }
-
-                Method[] queryMethods = repositoryType.getDeclaredMethods();
-                // read queries
-                Map<String, SelectStatement> repositoryQueriesMap = VmsMetadataLoader.loadStaticQueries(queryMethods);
-
-                Object instance = type.getConstructors()[0].newInstance(
-                        pkClazz,
-                        entityClazz,
-                        catalog.get( tableName ),
-                        operationalAPI,
-                        repositoryQueriesMap
-                );
+                Object instance = buildRepositoryProxy(tableName, repositoryType, catalog, operationalAPI, null);
                 tableToRepositoryMap.put(tableName, instance);
             }
         }
         return tableToRepositoryMap;
+    }
+
+    /**
+     * Builds one repository proxy, the same way each entry of loadRepositoryClasses's loop
+     * does -- extracted so it can also be called for a single repository type on its own
+     * (see VmsPreparedApplication#buildRepositoryProxy), with queries merged in from a map
+     * this class never has to know the origin of. That keeps the matcher below name-based
+     * (which methods have a known query) rather than annotation-based: VMODB's own @Query
+     * still works exactly as before (loadStaticQueries below still reads it), but nothing
+     * here has to import or recognize whatever annotation produced an entry in extraQueries --
+     * that stays entirely the caller's concern.
+     */
+    public static Object buildRepositoryProxy(String tableName, Class<?> repositoryType,
+                                               Map<String, Table> catalog,
+                                               OperationalAPI operationalAPI,
+                                               Map<String, SelectStatement> extraQueries)
+            throws InvocationTargetException, InstantiationException, IllegalAccessException {
+
+        Type[] types = getPkAndEntityTypesFromRepositoryClazz(repositoryType);
+        Class<?> pkClazz = (Class<?>) types[0];
+        Class<?> entityClazz = (Class<?>) types[1];
+
+        Map<String, SelectStatement> repositoryQueriesMap =
+                new HashMap<>(VmsMetadataLoader.loadStaticQueries(repositoryType.getDeclaredMethods()));
+        if (extraQueries != null) {
+            repositoryQueriesMap.putAll(extraQueries);
+        }
+
+        ElementMatcher.Junction<MethodDescription> queryMethodMatcher = ElementMatchers.none();
+        for (String methodName : repositoryQueriesMap.keySet()) {
+            queryMethodMatcher = queryMethodMatcher.or(ElementMatchers.named(methodName));
+        }
+
+        // generate type
+        TypeDescription.Generic generic = TypeDescription.Generic.Builder
+                .parameterizedType(AbstractProxyRepository.class, pkClazz, entityClazz).build();
+
+        ByteBuddy byteBuddy = new ByteBuddy();
+        Class<?> type;
+        try (DynamicType.Unloaded<?> dynamicType = byteBuddy
+                .subclass(generic, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
+                .implement(repositoryType)
+                .method(queryMethodMatcher)
+                .intercept(
+                        MethodDelegation.to(AbstractProxyRepository.Interceptor.class)
+                )
+                // suffixed with a counter: a repository type may now get a second proxy built
+                // for it (see VmsPreparedApplication#buildRepositoryProxy) in addition to the
+                // one prepare() already builds automatically for any repository type found in a
+                // @Microservice constructor -- ByteBuddy refuses to load two distinctly-defined
+                // classes of the same name into the same classloader, so each generated class
+                // needs its own name, even when generated from the same interface twice.
+                .name(repositoryType.getSimpleName().replaceFirst("I","") + "Impl$" + PROXY_COUNTER.incrementAndGet())
+                .make()) {
+            type = dynamicType
+                    .load(ClassLoader.getSystemClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                    .getLoaded();
+        } catch (IllegalStateException e) {
+            System.out.println("ERROR: Check if your module is loading other modules. \nLOADED: "+repositoryType.getCanonicalName());
+            throw new RuntimeException(e);
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
+
+        return type.getConstructors()[0].newInstance(
+                pkClazz,
+                entityClazz,
+                catalog.get( tableName ),
+                operationalAPI,
+                repositoryQueriesMap
+        );
     }
 
     /**

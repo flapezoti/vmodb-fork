@@ -1,5 +1,6 @@
 package dk.ku.di.dms.vms.sdk.embed.client;
 
+import dk.ku.di.dms.vms.modb.api.query.statement.SelectStatement;
 import dk.ku.di.dms.vms.modb.common.schema.VmsDataModel;
 import dk.ku.di.dms.vms.modb.common.schema.network.node.VmsNode;
 import dk.ku.di.dms.vms.modb.common.serdes.IVmsSerdesProxy;
@@ -11,6 +12,7 @@ import dk.ku.di.dms.vms.sdk.core.metadata.VmsRuntimeMetadata;
 import dk.ku.di.dms.vms.sdk.core.scheduler.VmsTransactionScheduler;
 import dk.ku.di.dms.vms.sdk.embed.channel.VmsEmbedInternalChannels;
 import dk.ku.di.dms.vms.sdk.embed.handler.VmsEventHandler;
+import dk.ku.di.dms.vms.sdk.embed.metadata.EmbedMetadataLoader;
 import dk.ku.di.dms.vms.web_common.IHttpHandler;
 import org.reflections.Reflections;
 
@@ -64,6 +66,25 @@ public final class VmsPreparedApplication {
     /** Same repository proxy VmsApplication#getRepositoryProxy(table) exposes after a full build. */
     public Object getRepositoryProxy(String table) {
         return tableToRepositoryMap.get(table);
+    }
+
+    /**
+     * Builds an additional repository proxy for `table` and `repositoryInterface`, the same way
+     * prepare()'s own repository proxies are built, but with `extraQueries` merged in -- a map
+     * this class (and VMODB generally) never has to know the origin of. Written for a host
+     * framework that wants its own query-defining annotation (not VMODB's @Query) recognized on
+     * a repository interface: the framework reads its own annotation, parses each query string
+     * with dk.ku.di.dms.vms.modb.api.query.parser.Parser itself, and passes the resulting
+     * method-name-keyed map here.
+     *
+     * This exists specifically so neither OperationalAPI nor Table (VMODB's internal operations
+     * on its own private state) ever has to leave this class: the caller gets back a finished
+     * proxy, the same shape getRepositoryProxy(table) already returns, nothing lower-level.
+     */
+    public Object buildRepositoryProxy(String table, Class<?> repositoryInterface,
+                                        Map<String, SelectStatement> extraQueries) throws Exception {
+        return EmbedMetadataLoader.buildRepositoryProxy(
+                table, repositoryInterface, catalog, transactionManager, extraQueries);
     }
 
     /**
